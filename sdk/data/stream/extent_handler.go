@@ -17,6 +17,7 @@ package stream
 import (
 	"fmt"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -106,6 +107,9 @@ type ExtentHandler struct {
 
 	// Signaled in receiver ONLY to exit *sender*.
 	doneSender chan struct{}
+
+	backEndGoRoutineCloseCnt int32
+	sync.Mutex
 }
 
 // NewExtentHandler returns a new extent handler.
@@ -192,9 +196,27 @@ func (eh *ExtentHandler) write(data []byte, offset, size int, direct bool) (ek *
 	return ek, nil
 }
 
+func (eh *ExtentHandler)cleanResouce(){
+	eh.Lock()
+	defer eh.Unlock()
+	if atomic.LoadInt32(&eh.backEndGoRoutineCloseCnt)==2{
+		atomic.StoreInt32(&eh.backEndGoRoutineCloseCnt,0)
+		eh.packet=nil
+		fmt.Println(eh.extID)
+		close(eh.empty)
+		close(eh.request)
+		close(eh.reply)
+		close(eh.doneReceiver)
+		close(eh.doneSender)
+	}
+}
+
 func (eh *ExtentHandler) sender() {
 	var err error
-
+	defer func() {
+		atomic.AddInt32(&eh.backEndGoRoutineCloseCnt,1)
+		eh.cleanResouce()
+	}()
 	//	t := time.NewTicker(5 * time.Second)
 	//	defer t.Stop()
 
@@ -258,7 +280,10 @@ func (eh *ExtentHandler) sender() {
 func (eh *ExtentHandler) receiver() {
 	//	t := time.NewTicker(5 * time.Second)
 	//	defer t.Stop()
-
+    defer func() {
+    	atomic.AddInt32(&eh.backEndGoRoutineCloseCnt,1)
+		eh.cleanResouce()
+	}()
 	for {
 		select {
 		//		case <-t.C:
