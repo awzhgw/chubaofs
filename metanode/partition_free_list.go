@@ -37,6 +37,23 @@ const (
 	DeleteWorkerCnt          = 10
 )
 
+var (
+	flMu             sync.RWMutex
+	deleteBatchCount = uint64(BatchCounts)
+)
+
+func DeleteBatchCount() (batchCount uint64) {
+	flMu.RLock()
+	flMu.RUnlock()
+	return deleteBatchCount
+}
+
+func SetDeleteBatchCount(batchCount uint64) {
+	flMu.Lock()
+	deleteBatchCount = batchCount
+	flMu.Unlock()
+}
+
 func (mp *metaPartition) startFreeList() (err error) {
 	if mp.delInodeFp, err = os.OpenFile(path.Join(mp.config.RootDir,
 		DeleteInodeFileExtension), OpenRWAppendOpt, 0644); err != nil {
@@ -139,7 +156,7 @@ func (mp *metaPartition) deleteWorker() {
 // delete Extents by Partition,and find all successDelete inode
 func (mp *metaPartition) batchDeleteExtentsByPartition(partitionDeleteExtents map[uint64][]*proto.ExtentKey, allInodes []*Inode) (shouldCommit []*Inode) {
 	occurErrors := make(map[uint64]error)
-	shouldCommit = make([]*Inode, 0, DeleteBatchCount())
+	shouldCommit = make([]*Inode, 0, BatchCounts)
 	var (
 		wg   sync.WaitGroup
 		lock sync.Mutex
@@ -186,7 +203,7 @@ func (mp *metaPartition) deleteMarkedInodes(inoSlice []uint64) {
 			log.LogErrorf(fmt.Sprintf("metaPartition(%v) deleteMarkedInodes panic (%v)", mp.config.PartitionId, r))
 		}
 	}()
-	shouldCommit := make([]*Inode, 0, DeleteBatchCount())
+	shouldCommit := make([]*Inode, 0, BatchCounts)
 	allDeleteExtents := make(map[string]uint64)
 	deleteExtentsByPartition := make(map[uint64][]*proto.ExtentKey)
 	allInodes := make([]*Inode, 0)

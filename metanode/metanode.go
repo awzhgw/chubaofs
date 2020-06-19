@@ -122,8 +122,6 @@ func doStart(s common.Server, cfg *config.Config) (err error) {
 		return
 	}
 
-	go m.startUpdateNodeInfo()
-
 	exporter.Init(cfg.GetString("role"), cfg)
 
 	// check local partition compare with master ,if lack,then not start
@@ -145,7 +143,6 @@ func doShutdown(s common.Server) {
 	if !ok {
 		return
 	}
-	m.stopUpdateNodeInfo()
 	// shutdown node and release the resource
 	m.stopServer()
 	m.stopMetaManager()
